@@ -1,0 +1,6 @@
+C:\Users\govin\Documents\study\asm\Project32_VS2019\Project32_VS2019\Debug\Project.exe
+C:\Users\govin\Documents\study\asm\Project32_VS2019\3\Debug\Project.exe
+C:\Users\govin\Documents\study\asm\Project32_VS2019\4\Debug\Project.exe
+C:\Users\govin\Documents\study\asm\Project32_VS2019\mul\Debug\Project.exe
+C:\Users\govin\Documents\study\asm\Project32_VS2019\read\Debug\Project.exe
+C:\Users\govin\Documents\study\asm\Project32_VS2019\ext_mul\Debug\Project.exe

@@ -1,0 +1,1379 @@
+Microsoft (R) Macro Assembler Version 14.28.29912.0	    05/07/21 03:07:22
+AddSub2.asm						     Page 1 - 1
+
+
+				;  College Registration Example         (Regist.asm)
+
+				; Simple demonstration of MASM's .IF,
+				; .ENDIF, and .ELSEIF directives.
+
+				INCLUDE Irvine32.inc
+			      C ; Include file for Irvine32.lib             (Irvine32.inc)
+			      C 
+			      C ;OPTION CASEMAP:NONE		; optional: make identifiers case-sensitive
+			      C 
+			      C INCLUDE SmallWin.inc		; MS-Windows prototypes, structures, and constants
+			      C .NOLIST
+			      C .LIST
+			      C 
+			      C INCLUDE VirtualKeys.inc
+			      C ; VirtualKeys.inc
+			      C .NOLIST
+			      C .LIST
+			      C 
+			      C 
+			      C .NOLIST
+			      C .LIST
+			      C 
+
+				;INCLUDE advapi32.INC
+				INCLUDELIB advapi32.lib
+
+				CryptAcquireContextA PROTO :PTR DWORD, :PTR BYTE, :PTR BYTE, :DWORD, :DWORD
+				CryptGenRandom PROTO :DWORD, :DWORD, :PTR BYTE
+
+ 00000000			.data
+ 00000000 45 6E 74 65 72	xxxx BYTE "Enter: ", 0
+	   3A 20 00
+
+ = 00000001			TRUE equ 1
+ = 00000000			FALSE equ 0
+ = 00000080			INT_MIN_BYTE_LEN equ 128
+ = 00000004			INT_PADDING_BYTE_LEN equ 4
+ = 00000084			INT_MIN_PADDED_BYTE_LEN equ INT_MIN_BYTE_LEN + 4
+ = 00000100			INT_MAX_BYTE_LEN equ 256
+ = 00000800			INT_MAX_BIT_LEN equ 2048
+
+ 00000008  0000007F [		BIG_ONE BYTE 127 DUP(0), 1
+	    00
+	   ] 01
+ 00000088  00000080 [		BIG_ZERO BYTE 128 DUP(0)
+	    00
+	   ]
+ 00000108  00000083 [		BIG_ONE_132 BYTE 131 DUP(0), 1
+	    00
+	   ] 01
+
+ 0000018C  0000007D [		gen BYTE 125 DUP(0), 1, 0, 1
+	    00
+	   ] 01 00 01
+ 0000020C CF CB 6F 29 4C	prime BYTE 0cfh, 0cbh, 06fh, 029h, 04ch, 05ch, 03bh, 09eh, 0e3h, 03ch, 01fh, 013h, 0b1h, 0beh, 087h, 0cch
+	   5C 3B 9E E3 3C
+	   1F 13 B1 BE 87
+	   CC
+ 0000021C  F6 BA 56 EE 54	      BYTE 0f6h, 0bah, 056h, 0eeh, 054h, 019h, 010h, 0f5h, 0dfh, 09bh, 003h, 0eah, 0e7h, 088h, 0afh, 080h
+	   19 10 F5 DF 9B
+	   03 EA E7 88 AF
+	   80
+ 0000022C  64 28 5A D0 07	      BYTE 064h, 028h, 05ah, 0d0h, 007h, 00ah, 05eh, 0abh, 039h, 06ch, 0fdh, 022h, 021h, 03dh, 026h, 037h
+	   0A 5E AB 39 6C
+	   FD 22 21 3D 26
+	   37
+ 0000023C  1F FA B5 29 C6	      BYTE 01fh, 0fah, 0b5h, 029h, 0c6h, 07eh, 0c9h, 0f3h, 037h, 006h, 0e1h, 0abh, 0adh, 089h, 007h, 0f6h
+	   7E C9 F3 37 06
+	   E1 AB AD 89 07
+	   F6
+ 0000024C  C0 C3 C5 01 EC	      BYTE 0c0h, 0c3h, 0c5h, 001h, 0ech, 0a9h, 0e4h, 094h, 0ach, 00dh, 096h, 038h, 0ebh, 064h, 0f4h, 09dh
+	   A9 E4 94 AC 0D
+	   96 38 EB 64 F4
+	   9D
+ 0000025C  DD 22 A3 B1 00	      BYTE 0ddh, 022h, 0a3h, 0b1h, 000h, 0cah, 0abh, 0d0h, 0f2h, 045h, 09bh, 0b0h, 09fh, 0b8h, 05fh, 07fh
+	   CA AB D0 F2 45
+	   9B B0 9F B8 5F
+	   7F
+ 0000026C  F8 2B E2 A0 B2	      BYTE 0f8h, 02bh, 0e2h, 0a0h, 0b2h, 0beh, 0b0h, 01dh, 01bh, 0a4h, 0b9h, 03bh, 04eh, 016h, 0d2h, 006h
+	   BE B0 1D 1B A4
+	   B9 3B 4E 16 D2
+	   06
+ 0000027C  DC 47 FC F8 96	      BYTE 0dch, 047h, 0fch, 0f8h, 096h, 0b0h, 000h, 033h, 096h, 009h, 04bh, 053h, 05ah, 050h, 0abh, 081h
+	   B0 00 33 96 09
+	   4B 53 5A 50 AB
+	   81
+
+ 00000000			.code
+
+				;--------------------------------------------------------
+ 00000000			BigNum_Shr PROC uses ecx esi, address  : DWORD,
+				                              num_bytes: DWORD
+				;
+				; Shifts a byte array 1 bit to the right
+				; Arguments: address   : address of the byte array
+				;            num_bytes : length of the byte array 
+				;--------------------------------------------------------
+ 00000000  55		   *	    push   ebp
+ 00000001  8B EC	   *	    mov    ebp, esp
+ 00000003  51		   *	    push   ecx
+ 00000004  56		   *	    push   esi
+ 00000005  8B 75 08		    mov esi, address
+ 00000008  8B 4D 0C		    mov ecx, num_bytes
+
+				; Shift first byte
+ 0000000B  83 E9 01		    sub ecx, 1
+ 0000000E  D0 2E		    shr byte ptr [esi], 1
+
+				; If only one byte, leave
+ 00000010  9C			    pushfd
+ 00000011  83 F9 00		    cmp ecx, 0
+ 00000014  74 11		    jz DONE
+ 00000016  9D			    popfd
+
+				; Else, shift the rest
+ 00000017			SHIFT:
+ 00000017  D0 5E 01		    rcr byte ptr [esi + 1], 1
+
+ 0000001A  9C			    pushfd
+ 0000001B  83 C6 01		    add esi, 1
+ 0000001E  9D			    popfd
+
+ 0000001F  E2 F6		    loop SHIFT
+				    ret
+ 00000021  5E		   *	    pop    esi
+ 00000022  59		   *	    pop    ecx
+ 00000023  C9		   *	    leave  
+ 00000024  C2 0008	   *	    ret    00008h
+
+ 00000027			DONE:
+ 00000027  9D			    popfd
+				    ret
+ 00000028  5E		   *	    pop    esi
+ 00000029  59		   *	    pop    ecx
+ 0000002A  C9		   *	    leave  
+ 0000002B  C2 0008	   *	    ret    00008h
+ 0000002E			BigNum_Shr ENDP
+
+ 0000002E			BigNum_Shl PROC uses ecx esi, address: DWORD,
+				                              num_bytes: DWORD
+				;
+				; Shifts a byte array 1 bit to the left
+				;
+				; Arguments: address   : address of the byte array
+				;            num_bytes : length of the byte array 
+				;--------------------------------------------------------
+ 0000002E  55		   *	    push   ebp
+ 0000002F  8B EC	   *	    mov    ebp, esp
+ 00000031  51		   *	    push   ecx
+ 00000032  56		   *	    push   esi
+ 00000033  8B 75 08		    mov esi, address
+ 00000036  8B 4D 0C		    mov ecx, num_bytes
+
+				; Shift the last byte
+ 00000039  83 E9 01		    sub ecx, 1
+ 0000003C  03 F1		    add esi, ecx
+ 0000003E  D0 26		    shl byte ptr [esi], 1
+
+				; If only one byte, leave
+ 00000040  9C			    pushfd
+ 00000041  83 F9 00		    cmp ecx, 0
+ 00000044  74 11		    jz DONE
+ 00000046  9D			    popfd
+
+				; Else, shift the rest
+ 00000047			SHIFT:
+ 00000047  D0 56 FF		    rcl byte ptr [esi - 1], 1
+ 0000004A  9C			    pushfd
+ 0000004B  83 EE 01		    sub esi, 1
+ 0000004E  9D			    popfd
+
+ 0000004F  E2 F6		    loop SHIFT
+				    ret
+ 00000051  5E		   *	    pop    esi
+ 00000052  59		   *	    pop    ecx
+ 00000053  C9		   *	    leave  
+ 00000054  C2 0008	   *	    ret    00008h
+
+ 00000057			DONE:
+ 00000057  9D			    popfd
+				    ret
+ 00000058  5E		   *	    pop    esi
+ 00000059  59		   *	    pop    ecx
+ 0000005A  C9		   *	    leave  
+ 0000005B  C2 0008	   *	    ret    00008h
+ 0000005E			BigNum_Shl ENDP
+
+ 0000005E			BigNum_Add PROC uses eax ebx ecx esi edi, arg1: PTR BYTE,
+				                                          arg2: PTR BYTE,
+				                                          dest: PTR BYTE,
+				                                          num_bytes: DWORD,
+				                                          skip_first_byte: BYTE
+				;
+				; Writes the sum of two big numbers into an address
+				;
+				; Arguments: arg1            : address of the first number
+				;            arg2            : address of the second number
+				;            dest            : address where the sum will be saved to
+				;            num_bytes       : maximum length of the numbers in bytes
+				;            skip_first_byte : set to 1 to not propagate carry to most significant byte (Useful for subtraction)
+				;---------------------------------------------------------------------------------------------------------------
+ 0000005E  55		   *	    push   ebp
+ 0000005F  8B EC	   *	    mov    ebp, esp
+ 00000061  50		   *	    push   eax
+ 00000062  53		   *	    push   ebx
+ 00000063  51		   *	    push   ecx
+ 00000064  56		   *	    push   esi
+ 00000065  57		   *	    push   edi
+ 00000066  8B 75 08		    mov esi, arg1
+ 00000069  8B 7D 0C		    mov edi, arg2
+ 0000006C  8B 5D 10		    mov ebx, dest
+ 0000006F  8B 4D 14		    mov ecx, num_bytes
+
+ 00000072  03 F1		    add esi, ecx
+ 00000074  03 F9		    add edi, ecx
+ 00000076  03 D9		    add ebx, ecx
+
+ 00000078  83 EE 01		    sub esi, 1
+ 0000007B  83 EF 01		    sub edi, 1
+ 0000007E  83 EB 01		    sub ebx, 1
+ 00000081  F8			    clc
+
+ 00000082			KEEP_ADDING:
+ 00000082  8A 06		    mov al, [esi]
+ 00000084  12 07		    adc al, [edi]
+
+ 00000086  9C			    pushfd
+ 00000087  88 03		    mov [ebx], al
+ 00000089  83 EE 01		    sub esi, 1
+ 0000008C  83 EF 01		    sub edi, 1
+ 0000008F  83 EB 01		    sub ebx, 1
+ 00000092  9D			    popfd
+
+ 00000093  E2 ED		    loop KEEP_ADDING
+
+				; If requested, don't propagate carry to most significant byte
+ 00000095  80 7D 18 00		    cmp skip_first_byte, FALSE
+ 00000099  75 06		    jnz DONE
+
+ 0000009B  C6 03 00		    mov byte ptr [ebx], 0
+ 0000009E  80 13 00		    adc byte ptr [ebx], 0
+				    
+ 000000A1			DONE:
+				    ret
+ 000000A1  5F		   *	    pop    edi
+ 000000A2  5E		   *	    pop    esi
+ 000000A3  59		   *	    pop    ecx
+ 000000A4  5B		   *	    pop    ebx
+ 000000A5  58		   *	    pop    eax
+ 000000A6  C9		   *	    leave  
+ 000000A7  C2 0014	   *	    ret    00014h
+ 000000AA			BigNum_Add ENDP
+
+				;------------------------------------------------------------------------------------------
+ 000000AA			BigNum_Mul PROC uses eax ebx ecx edx esi edi, n1: PTR BYTE,
+				                                              n2: PTR BYTE,
+				                                              n3: PTR BYTE
+				;
+				; Writes the product of two 1024-bit numbers to an address
+				; Arguments: n1 : address of the first number
+				;            n2 : address of the second number 
+				;            n3 : address where the product will be written to (must be at least 2048 bits)
+				;------------------------------------------------------------------------------------------
+ = 00000018			    other_var_space_ext_mul equ 6 * 4
+ = 00000118			    n1_space_ext_mul equ other_var_space_ext_mul + INT_MAX_BYTE_LEN
+ = 00000218			    n2_space_ext_mul equ n1_space_ext_mul + INT_MAX_BYTE_LEN
+ = 00000318			    total_space_ext_mul equ n2_space_ext_mul + INT_MAX_BYTE_LEN
+
+				; Reserve space for n1_var (copy of n1), n2_var (copy of n2), and dst_var (copy of n3)
+ = [ebp - n1_space_ext_mul]	    n1_var equ [ebp - n1_space_ext_mul]
+ = [ebp - n2_space_ext_mul]	    n2_var equ [ebp - n2_space_ext_mul]
+ = [ebp - total_space_ext_m	    dst_var equ [ebp - total_space_ext_mul]
+   ul]
+
+ 000000AA  55		   *	    push   ebp
+ 000000AB  8B EC	   *	    mov    ebp, esp
+ 000000AD  50		   *	    push   eax
+ 000000AE  53		   *	    push   ebx
+ 000000AF  51		   *	    push   ecx
+ 000000B0  52		   *	    push   edx
+ 000000B1  56		   *	    push   esi
+ 000000B2  57		   *	    push   edi
+ 000000B3  81 EC 00000318	    sub esp, total_space_ext_mul
+
+				; Null out the first 128 bytes of n1_var
+ 000000B9  B9 00000080		    mov ecx, INT_MIN_BYTE_LEN
+ 000000BE  8D BD FFFFFEE8	    lea edi, n1_var
+ 000000C4  B0 00		    mov al, 0
+ 000000C6  F3/ AA		    rep stosb
+
+				; Copy (the 128 bytes of) n1 to the remaining 128 bytes of n1_var
+ 000000C8  B9 00000080		    mov ecx, INT_MIN_BYTE_LEN
+ 000000CD  8B 75 08		    mov esi, n1
+ 000000D0  F3/ A4		    rep movsb
+
+				; Null out the first 128 bytes of n2_var
+ 000000D2  B9 00000080		    mov ecx, INT_MIN_BYTE_LEN
+ 000000D7  8D BD FFFFFDE8	    lea edi, n2_var
+ 000000DD  B0 00		    mov al, 0
+ 000000DF  F3/ AA		    rep stosb
+
+				; Copy (the 128 bytes of) n2 to the remaining 128 bytes of n2_var
+ 000000E1  B9 00000080		    mov ecx, INT_MIN_BYTE_LEN
+ 000000E6  8B 75 0C		    mov esi, n2
+ 000000E9  F3/ A4		    rep movsb
+
+				; Null out 256 bytes of dst_var
+ 000000EB  B9 00000100		    mov ecx, INT_MAX_BYTE_LEN
+ 000000F0  8D BD FFFFFCE8	    lea edi, dst_var
+ 000000F6  B0 00		    mov al, 0
+ 000000F8  F3/ AA		    rep stosb
+
+ 000000FA  B9 00000800		    mov ecx, INT_MAX_BIT_LEN
+
+ 000000FF			EXTRACT_LSB:
+				    Invoke BigNum_Shr, addr n2_var, INT_MAX_BYTE_LEN
+ 000000FF  68 00000100	   *	    push   +000000100h
+ 00000104  8D 85 FFFFFDE8  *	    lea    eax,  [ebp]+0FFFFFDE8h
+ 0000010A  50		   *	    push   eax
+ 0000010B  E8 FFFFFEF0	   *	    call   BigNum_Shr
+ 00000110  73 21		    jnc CONTINUE
+
+				    Invoke BigNum_Add, addr dst_var, addr n1_var, addr dst_var, INT_MAX_BYTE_LEN, FALSE
+ 00000112  6A 00	   *	    push   +000000000h
+ 00000114  68 00000100	   *	    push   +000000100h
+ 00000119  8D 85 FFFFFCE8  *	    lea    eax,  [ebp]+0FFFFFCE8h
+ 0000011F  50		   *	    push   eax
+ 00000120  8D 85 FFFFFEE8  *	    lea    eax,  [ebp]+0FFFFFEE8h
+ 00000126  50		   *	    push   eax
+ 00000127  8D 85 FFFFFCE8  *	    lea    eax,  [ebp]+0FFFFFCE8h
+ 0000012D  50		   *	    push   eax
+ 0000012E  E8 FFFFFF2B	   *	    call   BigNum_Add
+
+ 00000133			CONTINUE:
+				    Invoke BigNum_Shl, addr n1_var, INT_MAX_BYTE_LEN
+ 00000133  68 00000100	   *	    push   +000000100h
+ 00000138  8D 85 FFFFFEE8  *	    lea    eax,  [ebp]+0FFFFFEE8h
+ 0000013E  50		   *	    push   eax
+ 0000013F  E8 FFFFFEEA	   *	    call   BigNum_Shl
+ 00000144  E2 B9		    LOOP EXTRACT_LSB
+
+				; Write the result to n3
+ 00000146  B9 00000100		    mov ecx, INT_MAX_BYTE_LEN
+ 0000014B  8D B5 FFFFFCE8	    lea esi, dst_var
+ 00000151  8B 7D 10		    mov edi, n3
+ 00000154  F3/ A4		    rep movsb
+				    
+ 00000156  81 C4 00000318	    add esp, total_space_ext_mul
+				    ret
+ 0000015C  5F		   *	    pop    edi
+ 0000015D  5E		   *	    pop    esi
+ 0000015E  5A		   *	    pop    edx
+ 0000015F  59		   *	    pop    ecx
+ 00000160  5B		   *	    pop    ebx
+ 00000161  58		   *	    pop    eax
+ 00000162  C9		   *	    leave  
+ 00000163  C2 000C	   *	    ret    0000Ch
+ 00000166			BigNum_Mul ENDP
+
+				;-----------------------------------------------------
+ 00000166			BigNum_Not PROC uses eax ecx esi, a: PTR BYTE,
+				                                  num_bytes: DWORD
+				;
+				; Complements (NOTs) a big number
+				;
+				; Arguments: address   : address of the number
+				;            num_bytes : length of the number in bytes 
+				;-----------------------------------------------------
+ 00000166  55		   *	    push   ebp
+ 00000167  8B EC	   *	    mov    ebp, esp
+ 00000169  50		   *	    push   eax
+ 0000016A  51		   *	    push   ecx
+ 0000016B  56		   *	    push   esi
+ 0000016C  8B 4D 0C		    mov ecx, num_bytes
+ 0000016F  8B 75 08		    mov esi, a
+
+ 00000172			L1:
+ 00000172  F6 16		    not BYTE PTR [esi]
+ 00000174  83 C6 01		    add esi, 1
+ 00000177  E2 F9		    loop L1
+
+				    ret
+ 00000179  5E		   *	    pop    esi
+ 0000017A  59		   *	    pop    ecx
+ 0000017B  58		   *	    pop    eax
+ 0000017C  C9		   *	    leave  
+ 0000017D  C2 0008	   *	    ret    00008h
+ 00000180			BigNum_Not ENDP
+
+				;---------------------------------------------------------
+ 00000180			BigNum_Cmp PROC uses eax ebx ecx esi edi, a: PTR BYTE,
+				                                          b: PTR BYTE,
+				                                          num_bytes: DWORD
+				;
+				; Compares two big numbers and sets flags accordingly
+				;
+				; Arguments: a         : address of the first number
+				;            b         : address of the second number
+				;            num_bytes : length of the number in bytes 
+				;---------------------------------------------------------
+ 00000180  55		   *	    push   ebp
+ 00000181  8B EC	   *	    mov    ebp, esp
+ 00000183  50		   *	    push   eax
+ 00000184  53		   *	    push   ebx
+ 00000185  51		   *	    push   ecx
+ 00000186  56		   *	    push   esi
+ 00000187  57		   *	    push   edi
+ 00000188  8B 75 08		    mov esi, a
+ 0000018B  8B 7D 0C		    mov edi, b
+ 0000018E  8B 4D 10		    mov ecx, num_bytes
+
+ 00000191			L1:
+ 00000191  8A 06		    mov al, BYTE PTR [esi]
+ 00000193  8A 1F		    mov bl, BYTE PTR [edi]
+ 00000195  3A C3		    cmp al, bl
+ 00000197  74 09		    je L2
+				    ret
+ 00000199  5F		   *	    pop    edi
+ 0000019A  5E		   *	    pop    esi
+ 0000019B  59		   *	    pop    ecx
+ 0000019C  5B		   *	    pop    ebx
+ 0000019D  58		   *	    pop    eax
+ 0000019E  C9		   *	    leave  
+ 0000019F  C2 000C	   *	    ret    0000Ch
+ 000001A2			L2:
+ 000001A2  9C			    pushfd
+ 000001A3  83 C6 01		    add esi, 1
+ 000001A6  83 C7 01		    add edi, 1
+ 000001A9  9D			    popfd
+ 000001AA  E2 E5		    loop L1
+				    ret
+ 000001AC  5F		   *	    pop    edi
+ 000001AD  5E		   *	    pop    esi
+ 000001AE  59		   *	    pop    ecx
+ 000001AF  5B		   *	    pop    ebx
+ 000001B0  58		   *	    pop    eax
+ 000001B1  C9		   *	    leave  
+ 000001B2  C2 000C	   *	    ret    0000Ch
+ 000001B5			BigNum_Cmp ENDP
+
+				;----------------------------------------------------------------
+ 000001B5			BigNum_Mod PROC uses eax ebx ecx edx esi edi, n: PTR BYTE,
+				                                              d: PTR BYTE,
+				                                              r: PTR BYTE
+				;
+				; Divides a 2048-bit dividend by a 1024-bit divisor
+				; and stores the remainder in an address
+				;
+				; Arguments: n : address of the dividend
+				;            d : address of the divisor
+				;            r : address where the remainder should be written to
+				;----------------------------------------------------------------
+				    ;TODO divide by zero
+
+ = 00000018			    other_vars_space_ext_div equ 6 * 4
+ = 00000118			    n_var_space_ext_div equ other_vars_space_ext_div + INT_MAX_BYTE_LEN
+ = 0000019C			    d_var_space_ext_div = n_var_space_ext_div + INT_MIN_BYTE_LEN + INT_PADDING_BYTE_LEN
+ = 00000220			    total_space_ext_div = d_var_space_ext_div + INT_MIN_BYTE_LEN + INT_PADDING_BYTE_LEN
+
+				; Reserve space for n_var (copy of n), d_var (copy of d), and r_var (copy of r)
+ = [ebp - n_var_space_ext_d	    n_var equ [ebp - n_var_space_ext_div]
+   iv]
+ = [ebp - d_var_space_ext_d	    d_var equ [ebp - d_var_space_ext_div]
+   iv]
+ = [ebp - total_space_ext_d	    r_var equ [ebp - total_space_ext_div]
+   iv]
+
+ 000001B5  55		   *	    push   ebp
+ 000001B6  8B EC	   *	    mov    ebp, esp
+ 000001B8  50		   *	    push   eax
+ 000001B9  53		   *	    push   ebx
+ 000001BA  51		   *	    push   ecx
+ 000001BB  52		   *	    push   edx
+ 000001BC  56		   *	    push   esi
+ 000001BD  57		   *	    push   edi
+ 000001BE  81 EC 00000220	    sub esp, total_space_ext_div
+
+				; Copy n to n_var
+ 000001C4  B9 00000100		    mov ecx, INT_MAX_BYTE_LEN
+ 000001C9  8B 75 08		    mov esi, n
+ 000001CC  8D BD FFFFFEE8	    lea edi, n_var
+ 000001D2  F3/ A4		    rep movsb
+
+				; Add 4 bytes of padding for d (as the divisor needs to be more than 1024 bits for the algorithm)
+ 000001D4  B9 00000004		    mov ecx, INT_PADDING_BYTE_LEN
+ 000001D9  B0 00		    mov al, 0
+ 000001DB  8D BD FFFFFE64	    lea edi, d_var
+ 000001E1  F3/ AA		    rep stosb
+
+				; Copy the rest of the divisor
+ 000001E3  B9 00000080		    mov ecx, INT_MIN_BYTE_LEN
+ 000001E8  8B 75 0C		    mov esi, d
+ 000001EB  F3/ A4		    rep movsb
+
+ 000001ED  B9 00000080		    mov ecx, INT_MIN_BYTE_LEN
+ 000001F2  83 C1 04		    add ecx, INT_PADDING_BYTE_LEN
+ 000001F5  8D BD FFFFFDE0	    lea edi, r_var
+ 000001FB  B0 00		    mov al, 0
+ 000001FD  F3/ AA		    rep stosb
+
+ 000001FF  B9 00000800		    mov ecx, INT_MAX_BIT_LEN
+
+ 00000204			KEEP_SHIFTING:
+ 00000204  83 E9 01		    sub ecx, 1
+				    Invoke BigNum_Shl, addr n_var, INT_MAX_BYTE_LEN
+ 00000207  68 00000100	   *	    push   +000000100h
+ 0000020C  8D 85 FFFFFEE8  *	    lea    eax,  [ebp]+0FFFFFEE8h
+ 00000212  50		   *	    push   eax
+ 00000213  E8 FFFFFE16	   *	    call   BigNum_Shl
+ 00000218  73 EA		    jnc KEEP_SHIFTING
+				    
+ 0000021A  0F 92 C0		    setc al
+ 0000021D  83 C1 01		    add ecx, 1
+ 00000220			L1:
+ 00000220  51			    push ecx
+
+ 00000221  8D B5 FFFFFDE0	    lea esi, r_var
+				    Invoke BigNum_Shl, esi, INT_MIN_BYTE_LEN + INT_PADDING_BYTE_LEN
+ 00000227  68 00000084	   *	    push   +000000084h
+ 0000022C  56		   *	    push   esi
+ 0000022D  E8 FFFFFDFC	   *	    call   BigNum_Shl
+
+ 00000232  08 86 00000083	    or BYTE PTR [esi + INT_MIN_BYTE_LEN + INT_PADDING_BYTE_LEN - 1], al
+
+ 00000238  B9 00000004		    mov ecx, 4
+ 0000023D  B0 00		    mov al, 0
+ 0000023F  8D BD FFFFFE64	    lea edi, d_var
+ 00000245  F3/ AA		    rep stosb
+
+ 00000247  B9 00000080		    mov ecx, INT_MIN_BYTE_LEN
+ 0000024C  8B 75 0C		    mov esi, d
+ 0000024F  F3/ A4		    rep movsb
+
+ 00000251  8D 85 FFFFFE64	    lea eax, d_var
+				    ;lea esi, r_var
+				    Invoke BigNum_Cmp, addr r_var, eax, INT_MIN_BYTE_LEN + INT_PADDING_BYTE_LEN
+ 00000257  68 00000084	   *	    push   +000000084h
+ 0000025C  50		   *	    push   eax
+ 0000025D  8D 85 FFFFFDE0  *	    lea    eax,  [ebp]+0FFFFFDE0h
+ 00000263  50		   *	    push   eax
+ 00000264  E8 FFFFFF17	   *	    call   BigNum_Cmp
+ 00000269  72 39		    jb L2
+
+ 0000026B  8D B5 FFFFFE64	    lea esi, d_var
+ 00000271  8D 85 FFFFFDE0	    lea eax, r_var
+				    Invoke BigNum_Not, esi, INT_MIN_BYTE_LEN + INT_PADDING_BYTE_LEN
+ 00000277  68 00000084	   *	    push   +000000084h
+ 0000027C  56		   *	    push   esi
+ 0000027D  E8 FFFFFEE4	   *	    call   BigNum_Not
+				    Invoke BigNum_Add, esi, offset BIG_ONE_132, esi, INT_MIN_BYTE_LEN + INT_PADDING_BYTE_LEN, TRUE
+ 00000282  6A 01	   *	    push   +000000001h
+ 00000284  68 00000084	   *	    push   +000000084h
+ 00000289  56		   *	    push   esi
+ 0000028A  68 00000108 R   *	    push   dword  ptr OFFSET FLAT: BIG_ONE_132
+ 0000028F  56		   *	    push   esi
+ 00000290  E8 FFFFFDC9	   *	    call   BigNum_Add
+				    Invoke BigNum_Add, eax, esi, eax, INT_MIN_BYTE_LEN + INT_PADDING_BYTE_LEN, TRUE
+ 00000295  6A 01	   *	    push   +000000001h
+ 00000297  68 00000084	   *	    push   +000000084h
+ 0000029C  50		   *	    push   eax
+ 0000029D  56		   *	    push   esi
+ 0000029E  50		   *	    push   eax
+ 0000029F  E8 FFFFFDBA	   *	    call   BigNum_Add
+
+ 000002A4			L2:
+				    Invoke BigNum_Shl, addr n_var, INT_MAX_BYTE_LEN
+ 000002A4  68 00000100	   *	    push   +000000100h
+ 000002A9  8D 85 FFFFFEE8  *	    lea    eax,  [ebp]+0FFFFFEE8h
+ 000002AF  50		   *	    push   eax
+ 000002B0  E8 FFFFFD79	   *	    call   BigNum_Shl
+ 000002B5  0F 92 C0		    setc al
+
+ 000002B8  59			    pop ecx
+ 000002B9  49			    dec ecx
+ 000002BA  0F 85 FFFFFF60	    jnz L1
+
+ 000002C0  B9 00000080		    mov ecx, INT_MIN_BYTE_LEN
+ 000002C5  8D B5 FFFFFDE0	    lea esi, r_var
+ 000002CB  83 C6 04		    add esi, INT_PADDING_BYTE_LEN
+ 000002CE  8B 7D 10		    mov edi, r
+ 000002D1  F3/ A4		    rep movsb
+
+ 000002D3  81 C4 00000220	    add esp, total_space_ext_div
+
+				    ret
+ 000002D9  5F		   *	    pop    edi
+ 000002DA  5E		   *	    pop    esi
+ 000002DB  5A		   *	    pop    edx
+ 000002DC  59		   *	    pop    ecx
+ 000002DD  5B		   *	    pop    ebx
+ 000002DE  58		   *	    pop    eax
+ 000002DF  C9		   *	    leave  
+ 000002E0  C2 000C	   *	    ret    0000Ch
+ 000002E3			BigNum_Mod ENDP
+
+ 000002E3			BigNum_Mod_Exp PROC uses eax ecx edx, a: PTR BYTE, e: PTR BYTE, m: PTR BYTE, r: PTR BYTE
+ = 0000000C			    other_var_space_exp equ 3 * 4
+ = 0000008C			    a_space_exp equ other_var_space_exp + INT_MIN_BYTE_LEN
+ = 0000018C			    a_sq_space_exp equ a_space_exp + INT_MAX_BYTE_LEN
+ = 0000020C			    total_space_exp equ a_sq_space_exp + INT_MIN_BYTE_LEN
+				    
+ = [ebp - a_space_exp]		    a_buf equ [ebp - a_space_exp]
+ = [ebp - a_sq_space_exp]	    a_sq_buf equ [ebp - a_sq_space_exp]
+ = [ebp - total_space_exp]	    y equ [ebp - total_space_exp]
+
+ 000002E3  55		   *	    push   ebp
+ 000002E4  8B EC	   *	    mov    ebp, esp
+ 000002E6  50		   *	    push   eax
+ 000002E7  51		   *	    push   ecx
+ 000002E8  52		   *	    push   edx
+ 000002E9  81 EC 0000020C	    sub esp, total_space_exp
+
+				    Invoke BigNum_Cmp, e, offset BIG_ZERO, INT_MIN_BYTE_LEN
+ 000002EF  68 00000080	   *	    push   +000000080h
+ 000002F4  68 00000088 R   *	    push   dword  ptr OFFSET FLAT: BIG_ZERO
+ 000002F9  FF 75 0C	   *	    push   dword  ptr ss:[ebp]+00000000Ch
+ 000002FC  E8 FFFFFE7F	   *	    call   BigNum_Cmp
+ 00000301  0F 84 000000A8	    je L3
+
+ 00000307  B9 00000080		    mov ecx, INT_MIN_BYTE_LEN
+ 0000030C  8B 75 08		    mov esi, a
+ 0000030F  8D BD FFFFFF74	    lea edi, a_buf
+ 00000315  F3/ A4		    rep movsb
+
+ 00000317  B9 00000080		    mov ecx, INT_MIN_BYTE_LEN
+ 0000031C  BE 00000008 R	    mov esi, offset BIG_ONE
+ 00000321  8D BD FFFFFDF4	    lea edi, y
+ 00000327  F3/ A4		    rep movsb
+
+ 00000329  33 C9		    xor ecx, ecx
+
+ 0000032B			L1:
+ 0000032B  41			    inc ecx
+ 0000032C  8D 85 FFFFFE74	    lea eax, a_sq_buf
+ 00000332  8D 9D FFFFFF74	    lea ebx, a_buf
+ 00000338  8D 95 FFFFFDF4	    lea edx, y
+
+				    Invoke BigNum_Shr, e, INT_MIN_BYTE_LEN
+ 0000033E  68 00000080	   *	    push   +000000080h
+ 00000343  FF 75 0C	   *	    push   dword  ptr ss:[ebp]+00000000Ch
+ 00000346  E8 FFFFFCB5	   *	    call   BigNum_Shr
+ 0000034B  72 14		    jc L2
+
+				    Invoke BigNum_Mul, ebx, ebx, eax
+ 0000034D  50		   *	    push   eax
+ 0000034E  53		   *	    push   ebx
+ 0000034F  53		   *	    push   ebx
+ 00000350  E8 FFFFFD55	   *	    call   BigNum_Mul
+				    Invoke BigNum_Mod, eax, m, ebx
+ 00000355  53		   *	    push   ebx
+ 00000356  FF 75 10	   *	    push   dword  ptr ss:[ebp]+000000010h
+ 00000359  50		   *	    push   eax
+ 0000035A  E8 FFFFFE56	   *	    call   BigNum_Mod
+
+ 0000035F  EB 24		    jmp CONTINUE
+ 00000361			L2:
+
+				    Invoke BigNum_Mul, ebx, edx, eax
+ 00000361  50		   *	    push   eax
+ 00000362  52		   *	    push   edx
+ 00000363  53		   *	    push   ebx
+ 00000364  E8 FFFFFD41	   *	    call   BigNum_Mul
+				    Invoke BigNum_Mod, eax, m, edx
+ 00000369  52		   *	    push   edx
+ 0000036A  FF 75 10	   *	    push   dword  ptr ss:[ebp]+000000010h
+ 0000036D  50		   *	    push   eax
+ 0000036E  E8 FFFFFE42	   *	    call   BigNum_Mod
+
+				    Invoke BigNum_Mul, ebx, ebx, eax
+ 00000373  50		   *	    push   eax
+ 00000374  53		   *	    push   ebx
+ 00000375  53		   *	    push   ebx
+ 00000376  E8 FFFFFD2F	   *	    call   BigNum_Mul
+				    Invoke BigNum_Mod, eax, m, ebx
+ 0000037B  53		   *	    push   ebx
+ 0000037C  FF 75 10	   *	    push   dword  ptr ss:[ebp]+000000010h
+ 0000037F  50		   *	    push   eax
+ 00000380  E8 FFFFFE30	   *	    call   BigNum_Mod
+
+ 00000385			CONTINUE:
+				    Invoke BigNum_Cmp, e, offset BIG_ONE, INT_MIN_BYTE_LEN
+ 00000385  68 00000080	   *	    push   +000000080h
+ 0000038A  68 00000008 R   *	    push   dword  ptr OFFSET FLAT: BIG_ONE
+ 0000038F  FF 75 0C	   *	    push   dword  ptr ss:[ebp]+00000000Ch
+ 00000392  E8 FFFFFDE9	   *	    call   BigNum_Cmp
+ 00000397  77 92		    ja L1
+
+				    Invoke BigNum_Mul, ebx, edx, eax
+ 00000399  50		   *	    push   eax
+ 0000039A  52		   *	    push   edx
+ 0000039B  53		   *	    push   ebx
+ 0000039C  E8 FFFFFD09	   *	    call   BigNum_Mul
+				    Invoke BigNum_Mod, eax, m, r
+ 000003A1  FF 75 14	   *	    push   dword  ptr ss:[ebp]+000000014h
+ 000003A4  FF 75 10	   *	    push   dword  ptr ss:[ebp]+000000010h
+ 000003A7  50		   *	    push   eax
+ 000003A8  E8 FFFFFE08	   *	    call   BigNum_Mod
+ 000003AD  EB 0F		    jmp DONE
+
+ 000003AF			L3:
+ 000003AF  B9 00000080		    mov ecx, INT_MIN_BYTE_LEN
+ 000003B4  BE 00000008 R	    mov esi, offset BIG_ONE
+ 000003B9  8B 7D 14		    mov edi, r
+ 000003BC  F3/ A4		    rep movsb
+ 000003BE			DONE:
+ 000003BE  81 C4 0000020C	    add esp, total_space_exp
+				    ret
+ 000003C4  5A		   *	    pop    edx
+ 000003C5  59		   *	    pop    ecx
+ 000003C6  58		   *	    pop    eax
+ 000003C7  C9		   *	    leave  
+ 000003C8  C2 0010	   *	    ret    00010h
+ 000003CB			BigNum_Mod_Exp ENDP
+
+ 000003CB			Print_BigNum PROC uses ecx esi, number: PTR BYTE, num_bytes: DWORD
+ 000003CB  55		   *	    push   ebp
+ 000003CC  8B EC	   *	    mov    ebp, esp
+ 000003CE  51		   *	    push   ecx
+ 000003CF  56		   *	    push   esi
+ 000003D0  8B 4D 0C		    mov ecx, num_bytes
+ 000003D3  8B 75 08		    mov esi, number
+
+ 000003D6  32 C0		    xor al, al
+
+ 000003D8			L1:
+ 000003D8  0F B6 06		    movzx eax, BYTE PTR [esi]
+ 000003DB  BB 00000001		    mov ebx, 1
+ 000003E0  E8 00000000 E	    Call WriteHexB
+
+ 000003E5  83 C6 01		    add esi, 1
+ 000003E8  E2 EE		    loop L1
+
+				    ret
+ 000003EA  5E		   *	    pop    esi
+ 000003EB  59		   *	    pop    ecx
+ 000003EC  C9		   *	    leave  
+ 000003ED  C2 0008	   *	    ret    00008h
+ 000003F0			Print_BigNum ENDP
+
+ 000003F0			Hash PROC uses eax ecx esi edi, input_string: PTR BYTE, output_hash: PTR BYTE
+ = 00000080			    total_space_hash equ INT_MIN_BYTE_LEN
+ = [ebp - total_space_hash]	    input_string_hash equ [ebp - total_space_hash]
+
+ 000003F0  55		   *	    push   ebp
+ 000003F1  8B EC	   *	    mov    ebp, esp
+ 000003F3  50		   *	    push   eax
+ 000003F4  51		   *	    push   ecx
+ 000003F5  56		   *	    push   esi
+ 000003F6  57		   *	    push   edi
+ 000003F7  81 EC 00000080	    sub esp, total_space_hash
+
+ 000003FD  8B 55 08		    mov edx, input_string
+ 00000400  E8 00000000 E	    Call StrLength
+ 00000405  50			    push eax
+
+ 00000406  B9 00000080		    mov ecx, INT_MIN_BYTE_LEN
+ 0000040B  2B C8		    sub ecx, eax
+ 0000040D  8D 7D 80		    lea edi, input_string_hash
+ 00000410  B0 00		    mov al, 0
+ 00000412  F3/ AA		    rep stosb
+
+ 00000414  58			    pop eax
+ 00000415  8B C8		    mov ecx, eax
+ 00000417  8B 75 08		    mov esi, input_string
+ 0000041A  F3/ A4		    rep movsb
+
+ 0000041C  8B 7D 0C		    mov edi, output_hash
+				    Invoke BigNum_Mod_Exp, offset gen, addr input_string_hash, offset prime, edi
+ 0000041F  57		   *	    push   edi
+ 00000420  68 0000020C R   *	    push   dword  ptr OFFSET FLAT: prime
+ 00000425  8D 45 80	   *	    lea    eax,  [ebp]+0FFFFFF80h
+ 00000428  50		   *	    push   eax
+ 00000429  68 0000018C R   *	    push   dword  ptr OFFSET FLAT: gen
+ 0000042E  E8 FFFFFEB0	   *	    call   BigNum_Mod_Exp
+
+ 00000433  81 C4 00000080	    add esp, total_space_hash
+
+				    ret
+ 00000439  5F		   *	    pop    edi
+ 0000043A  5E		   *	    pop    esi
+ 0000043B  59		   *	    pop    ecx
+ 0000043C  58		   *	    pop    eax
+ 0000043D  C9		   *	    leave  
+ 0000043E  C2 0008	   *	    ret    00008h
+ 00000441			Hash ENDP
+
+ 00000441			main PROC
+ = 00000020			    input_string_space_main equ 32
+ = 000000A0			    total_space_main equ input_string_space_main + INT_MIN_BYTE_LEN
+				    
+ = [ebp - input_string_spac	    input_string_main equ [ebp - input_string_space_main]
+   e_main]
+ = [ebp - total_space_main]	    output_hash equ [ebp - total_space_main]
+ 00000441  81 EC 000000A0	    sub esp, total_space_main
+
+ 00000447			L1:
+ 00000447  BA 00000000 R	    mov edx, offset xxxx
+				    Invoke WriteString
+ 0000044C  E8 00000000 E   *	    call   WriteString
+
+ 00000451  B9 00000020		    mov ecx, 32
+ 00000456  8D 7D E0		    lea edi, input_string_main
+ 00000459  B0 00		    mov al, 0
+ 0000045B  F3/ AA		    rep stosb
+
+ 0000045D  B9 00000020		    mov ecx, 32
+ 00000462  8D 55 E0		    lea edx, input_string_main
+				    Invoke ReadString
+ 00000465  E8 00000000 E   *	    call   ReadString
+				    
+ 0000046A  B0 0A		    mov al, 10
+				    Invoke WriteChar
+ 0000046C  E8 00000000 E   *	    call   WriteChar
+
+				    Invoke Hash, edx, addr output_hash
+ 00000471  8D 85 FFFFFF60  *	    lea    eax,  [ebp]+0FFFFFF60h
+ 00000477  50		   *	    push   eax
+ 00000478  52		   *	    push   edx
+ 00000479  E8 FFFFFF72	   *	    call   Hash
+				    Invoke Print_BigNum, addr output_hash, INT_MIN_BYTE_LEN
+ 0000047E  68 00000080	   *	    push   +000000080h
+ 00000483  8D 85 FFFFFF60  *	    lea    eax,  [ebp]+0FFFFFF60h
+ 00000489  50		   *	    push   eax
+ 0000048A  E8 FFFFFF3C	   *	    call   Print_BigNum
+
+ 0000048F  B0 0A		    mov al, 10
+				    Invoke WriteChar
+ 00000491  E8 00000000 E   *	    call   WriteChar
+
+ 00000496  E2 AF		    loop L1
+ 00000498			main ENDP
+
+				END main
+Microsoft (R) Macro Assembler Version 14.28.29912.0	    05/07/21 03:07:22
+AddSub2.asm						     Symbols 2 - 1
+
+
+
+
+Structures and Unions:
+
+                N a m e                  Size
+                                         Offset      Type
+
+CONSOLE_CURSOR_INFO  . . . . . .	 00000008
+  dwSize . . . . . . . . . . . .	 00000000	 DWord
+  bVisible . . . . . . . . . . .	 00000004	 DWord
+CONSOLE_SCREEN_BUFFER_INFO . . .	 00000016
+  dwSize . . . . . . . . . . . .	 00000000	 DWord
+  dwCursorPosition . . . . . . .	 00000004	 DWord
+  wAttributes  . . . . . . . . .	 00000008	 Word
+  srWindow . . . . . . . . . . .	 0000000A	 QWord
+  dwMaximumWindowSize  . . . . .	 00000012	 DWord
+COORD  . . . . . . . . . . . . .	 00000004
+  X  . . . . . . . . . . . . . .	 00000000	 Word
+  Y  . . . . . . . . . . . . . .	 00000002	 Word
+FILETIME . . . . . . . . . . . .	 00000008
+  loDateTime . . . . . . . . . .	 00000000	 DWord
+  hiDateTime . . . . . . . . . .	 00000004	 DWord
+FOCUS_EVENT_RECORD . . . . . . .	 00000004
+  bSetFocus  . . . . . . . . . .	 00000000	 DWord
+FPU_ENVIRON  . . . . . . . . . .	 0000001C
+  controlWord  . . . . . . . . .	 00000000	 Word
+  statusWord . . . . . . . . . .	 00000004	 Word
+  tagWord  . . . . . . . . . . .	 00000008	 Word
+  instrPointerOffset . . . . . .	 0000000C	 DWord
+  instrPointerSelector . . . . .	 00000010	 DWord
+  operandPointerOffset . . . . .	 00000014	 DWord
+  operandPointerSelector . . . .	 00000018	 Word
+INPUT_RECORD . . . . . . . . . .	 00000014
+  EventType  . . . . . . . . . .	 00000000	 Word
+  Event  . . . . . . . . . . . .	 00000004	 XmmWord
+  bKeyDown . . . . . . . . . . .	 00000000	 DWord
+  wRepeatCount . . . . . . . . .	 00000004	 Word
+  wVirtualKeyCode  . . . . . . .	 00000006	 Word
+  wVirtualScanCode . . . . . . .	 00000008	 Word
+  uChar  . . . . . . . . . . . .	 0000000A	 Word
+  UnicodeChar  . . . . . . . . .	 00000000	 Word
+  AsciiChar  . . . . . . . . . .	 00000000	 Byte
+  dwControlKeyState  . . . . . .	 0000000C	 DWord
+  dwMousePosition  . . . . . . .	 00000000	 DWord
+  dwButtonState  . . . . . . . .	 00000004	 DWord
+  dwMouseControlKeyState . . . .	 00000008	 DWord
+  dwEventFlags . . . . . . . . .	 0000000C	 DWord
+  dwSize . . . . . . . . . . . .	 00000000	 DWord
+  dwCommandId  . . . . . . . . .	 00000000	 DWord
+  bSetFocus  . . . . . . . . . .	 00000000	 DWord
+KEY_EVENT_RECORD . . . . . . . .	 00000010
+  bKeyDown . . . . . . . . . . .	 00000000	 DWord
+  wRepeatCount . . . . . . . . .	 00000004	 Word
+  wVirtualKeyCode  . . . . . . .	 00000006	 Word
+  wVirtualScanCode . . . . . . .	 00000008	 Word
+  uChar  . . . . . . . . . . . .	 0000000A	 Word
+  UnicodeChar  . . . . . . . . .	 00000000	 Word
+  AsciiChar  . . . . . . . . . .	 00000000	 Byte
+  dwControlKeyState  . . . . . .	 0000000C	 DWord
+MENU_EVENT_RECORD  . . . . . . .	 00000004
+  dwCommandId  . . . . . . . . .	 00000000	 DWord
+MOUSE_EVENT_RECORD . . . . . . .	 00000010
+  dwMousePosition  . . . . . . .	 00000000	 DWord
+  dwButtonState  . . . . . . . .	 00000004	 DWord
+  dwMouseControlKeyState . . . .	 00000008	 DWord
+  dwEventFlags . . . . . . . . .	 0000000C	 DWord
+SMALL_RECT . . . . . . . . . . .	 00000008
+  Left . . . . . . . . . . . . .	 00000000	 Word
+  Top  . . . . . . . . . . . . .	 00000002	 Word
+  Right  . . . . . . . . . . . .	 00000004	 Word
+  Bottom . . . . . . . . . . . .	 00000006	 Word
+SYSTEMTIME . . . . . . . . . . .	 00000010
+  wYear  . . . . . . . . . . . .	 00000000	 Word
+  wMonth . . . . . . . . . . . .	 00000002	 Word
+  wDayOfWeek . . . . . . . . . .	 00000004	 Word
+  wDay . . . . . . . . . . . . .	 00000006	 Word
+  wHour  . . . . . . . . . . . .	 00000008	 Word
+  wMinute  . . . . . . . . . . .	 0000000A	 Word
+  wSecond  . . . . . . . . . . .	 0000000C	 Word
+  wMilliseconds  . . . . . . . .	 0000000E	 Word
+WINDOW_BUFFER_SIZE_RECORD  . . .	 00000004
+  dwSize . . . . . . . . . . . .	 00000000	 DWord
+
+
+Segments and Groups:
+
+                N a m e                 Size     Length   Align   Combine Class
+
+FLAT . . . . . . . . . . . . . .	GROUP
+STACK  . . . . . . . . . . . . .	32 Bit	 00001000 Para	  Stack	  'STACK'	 
+_DATA  . . . . . . . . . . . . .	32 Bit	 0000028C Para	  Public  'DATA'	
+_TEXT  . . . . . . . . . . . . .	32 Bit	 00000498 Para	  Public  'CODE'	
+
+
+Procedures, parameters, and locals:
+
+                N a m e                 Type     Value    Attr
+
+BigNum_Add . . . . . . . . . . .	P Near	 0000005E _TEXT	Length= 0000004C Public STDCALL
+  arg1 . . . . . . . . . . . . .	DWord	 bp + 00000008
+  arg2 . . . . . . . . . . . . .	DWord	 bp + 0000000C
+  dest . . . . . . . . . . . . .	DWord	 bp + 00000010
+  num_bytes  . . . . . . . . . .	DWord	 bp + 00000014
+  skip_first_byte  . . . . . . .	Byte	 bp + 00000018
+  KEEP_ADDING  . . . . . . . . .	L Near	 00000082 _TEXT	
+  DONE . . . . . . . . . . . . .	L Near	 000000A1 _TEXT	
+BigNum_Cmp . . . . . . . . . . .	P Near	 00000180 _TEXT	Length= 00000035 Public STDCALL
+  a  . . . . . . . . . . . . . .	DWord	 bp + 00000008
+  b  . . . . . . . . . . . . . .	DWord	 bp + 0000000C
+  num_bytes  . . . . . . . . . .	DWord	 bp + 00000010
+  L1 . . . . . . . . . . . . . .	L Near	 00000191 _TEXT	
+  L2 . . . . . . . . . . . . . .	L Near	 000001A2 _TEXT	
+BigNum_Mod_Exp . . . . . . . . .	P Near	 000002E3 _TEXT	Length= 000000E8 Public STDCALL
+  a  . . . . . . . . . . . . . .	DWord	 bp + 00000008
+  e  . . . . . . . . . . . . . .	DWord	 bp + 0000000C
+  m  . . . . . . . . . . . . . .	DWord	 bp + 00000010
+  r  . . . . . . . . . . . . . .	DWord	 bp + 00000014
+  L1 . . . . . . . . . . . . . .	L Near	 0000032B _TEXT	
+  L2 . . . . . . . . . . . . . .	L Near	 00000361 _TEXT	
+  CONTINUE . . . . . . . . . . .	L Near	 00000385 _TEXT	
+  L3 . . . . . . . . . . . . . .	L Near	 000003AF _TEXT	
+  DONE . . . . . . . . . . . . .	L Near	 000003BE _TEXT	
+BigNum_Mod . . . . . . . . . . .	P Near	 000001B5 _TEXT	Length= 0000012E Public STDCALL
+  n  . . . . . . . . . . . . . .	DWord	 bp + 00000008
+  d  . . . . . . . . . . . . . .	DWord	 bp + 0000000C
+  r  . . . . . . . . . . . . . .	DWord	 bp + 00000010
+  KEEP_SHIFTING  . . . . . . . .	L Near	 00000204 _TEXT	
+  L1 . . . . . . . . . . . . . .	L Near	 00000220 _TEXT	
+  L2 . . . . . . . . . . . . . .	L Near	 000002A4 _TEXT	
+BigNum_Mul . . . . . . . . . . .	P Near	 000000AA _TEXT	Length= 000000BC Public STDCALL
+  n1 . . . . . . . . . . . . . .	DWord	 bp + 00000008
+  n2 . . . . . . . . . . . . . .	DWord	 bp + 0000000C
+  n3 . . . . . . . . . . . . . .	DWord	 bp + 00000010
+  EXTRACT_LSB  . . . . . . . . .	L Near	 000000FF _TEXT	
+  CONTINUE . . . . . . . . . . .	L Near	 00000133 _TEXT	
+BigNum_Not . . . . . . . . . . .	P Near	 00000166 _TEXT	Length= 0000001A Public STDCALL
+  a  . . . . . . . . . . . . . .	DWord	 bp + 00000008
+  num_bytes  . . . . . . . . . .	DWord	 bp + 0000000C
+  L1 . . . . . . . . . . . . . .	L Near	 00000172 _TEXT	
+BigNum_Shl . . . . . . . . . . .	P Near	 0000002E _TEXT	Length= 00000030 Public STDCALL
+  address  . . . . . . . . . . .	DWord	 bp + 00000008
+  num_bytes  . . . . . . . . . .	DWord	 bp + 0000000C
+  SHIFT  . . . . . . . . . . . .	L Near	 00000047 _TEXT	
+  DONE . . . . . . . . . . . . .	L Near	 00000057 _TEXT	
+BigNum_Shr . . . . . . . . . . .	P Near	 00000000 _TEXT	Length= 0000002E Public STDCALL
+  address  . . . . . . . . . . .	DWord	 bp + 00000008
+  num_bytes  . . . . . . . . . .	DWord	 bp + 0000000C
+  SHIFT  . . . . . . . . . . . .	L Near	 00000017 _TEXT	
+  DONE . . . . . . . . . . . . .	L Near	 00000027 _TEXT	
+CloseFile  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+CloseHandle  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+Clrscr . . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+CreateFileA  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+CreateOutputFile . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+Crlf . . . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+CryptAcquireContextA . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+CryptGenRandom . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+Delay  . . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+DumpMem  . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+DumpRegs . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ExitProcess  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+FileTimeToDosDateTime  . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+FileTimeToSystemTime . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+FlushConsoleInputBuffer  . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+FormatMessageA . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetCommandLineA  . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetCommandTail . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetConsoleCP . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetConsoleCursorInfo . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetConsoleMode . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetConsoleScreenBufferInfo . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetDateTime  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetFileTime  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetKeyState  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetLastError . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetLocalTime . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetMaxXY . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetMseconds  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetNumberOfConsoleInputEvents  .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetProcessHeap . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetStdHandle . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetSystemTime  . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetTextColor . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetTickCount . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+Gotoxy . . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+Hash . . . . . . . . . . . . . .	P Near	 000003F0 _TEXT	Length= 00000051 Public STDCALL
+  input_string . . . . . . . . .	DWord	 bp + 00000008
+  output_hash  . . . . . . . . .	DWord	 bp + 0000000C
+HeapAlloc  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+HeapCreate . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+HeapDestroy  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+HeapFree . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+HeapSize . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+IsDigit  . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+LocalFree  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+MessageBoxA  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+MsgBoxAsk  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+MsgBox . . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+OpenInputFile  . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ParseDecimal32 . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ParseInteger32 . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+PeekConsoleInputA  . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+Print_BigNum . . . . . . . . . .	P Near	 000003CB _TEXT	Length= 00000025 Public STDCALL
+  number . . . . . . . . . . . .	DWord	 bp + 00000008
+  num_bytes  . . . . . . . . . .	DWord	 bp + 0000000C
+  L1 . . . . . . . . . . . . . .	L Near	 000003D8 _TEXT	
+Random32 . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+RandomRange  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+Randomize  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ReadChar . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ReadConsoleA . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ReadConsoleInputA  . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ReadDec  . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ReadFile . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ReadFloat  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ReadFromFile . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ReadHex  . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ReadInt  . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ReadKeyFlush . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ReadKey  . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ReadString . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+SetConsoleCursorInfo . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+SetConsoleCursorPosition . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+SetConsoleMode . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+SetConsoleScreenBufferSize . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+SetConsoleTextAttribute  . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+SetConsoleTitleA . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+SetConsoleWindowInfo . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+SetFilePointer . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+SetLocalTime . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+SetTextColor . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ShowFPUStack . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+Sleep  . . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+StrLength  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+Str_compare  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+Str_copy . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+Str_length . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+Str_trim . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+Str_ucase  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+SystemTimeToFileTime . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WaitMsg  . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteBinB  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteBin . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteChar  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteConsoleA  . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteConsoleOutputAttribute  . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteConsoleOutputCharacterA . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteDec . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteFile  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteFloat . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteHexB  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteHex . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteInt . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteStackFrameName  . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteStackFrame  . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteString  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteToFile  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteWindowsMsg  . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+main . . . . . . . . . . . . . .	P Near	 00000441 _TEXT	Length= 00000057 Public STDCALL
+  L1 . . . . . . . . . . . . . .	L Near	 00000447 _TEXT	
+printf . . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External C
+scanf  . . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External C
+wsprintfA  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External C
+
+
+Symbols:
+
+                N a m e                 Type     Value    Attr
+
+@CodeSize  . . . . . . . . . . .	Number	 00000000h   
+@DataSize  . . . . . . . . . . .	Number	 00000000h   
+@Interface . . . . . . . . . . .	Number	 00000003h   
+@Model . . . . . . . . . . . . .	Number	 00000007h   
+@code  . . . . . . . . . . . . .	Text   	 _TEXT
+@data  . . . . . . . . . . . . .	Text   	 FLAT
+@fardata?  . . . . . . . . . . .	Text   	 FLAT
+@fardata . . . . . . . . . . . .	Text   	 FLAT
+@stack . . . . . . . . . . . . .	Text   	 FLAT
+ALT_MASK . . . . . . . . . . . .	Number	 00000003h   
+BIG_ONE_132  . . . . . . . . . .	Byte	 00000108 _DATA	
+BIG_ONE  . . . . . . . . . . . .	Byte	 00000008 _DATA	
+BIG_ZERO . . . . . . . . . . . .	Byte	 00000088 _DATA	
+CAPSLOCK_ON  . . . . . . . . . .	Number	 00000080h   
+CREATE_ALWAYS  . . . . . . . . .	Number	 00000002h   
+CREATE_NEW . . . . . . . . . . .	Number	 00000001h   
+CTRL_MASK  . . . . . . . . . . .	Number	 0000000Ch   
+CreateFile . . . . . . . . . . .	Text   	 CreateFileA
+DO_NOT_SHARE . . . . . . . . . .	Number	 00000000h   
+ENABLE_ECHO_INPUT  . . . . . . .	Number	 00000004h   
+ENABLE_LINE_INPUT  . . . . . . .	Number	 00000002h   
+ENABLE_MOUSE_INPUT . . . . . . .	Number	 00000010h   
+ENABLE_PROCESSED_INPUT . . . . .	Number	 00000001h   
+ENABLE_PROCESSED_OUTPUT  . . . .	Number	 00000001h   
+ENABLE_WINDOW_INPUT  . . . . . .	Number	 00000008h   
+ENABLE_WRAP_AT_EOL_OUTPUT  . . .	Number	 00000002h   
+ENHANCED_KEY . . . . . . . . . .	Number	 00000100h   
+FALSE  . . . . . . . . . . . . .	Number	 00000000h   
+FILE_APPEND_DATA . . . . . . . .	Number	 00000004h   
+FILE_ATTRIBUTE_ARCHIVE . . . . .	Number	 00000020h   
+FILE_ATTRIBUTE_COMPRESSED  . . .	Number	 00000800h   
+FILE_ATTRIBUTE_DEVICE  . . . . .	Number	 00000040h   
+FILE_ATTRIBUTE_DIRECTORY . . . .	Number	 00000010h   
+FILE_ATTRIBUTE_ENCRYPTED . . . .	Number	 00004000h   
+FILE_ATTRIBUTE_HIDDEN  . . . . .	Number	 00000002h   
+FILE_ATTRIBUTE_NORMAL  . . . . .	Number	 00000080h   
+FILE_ATTRIBUTE_NOT_CONTENT_INDEXED .	Number	 00002000h   
+FILE_ATTRIBUTE_OFFLINE . . . . .	Number	 00001000h   
+FILE_ATTRIBUTE_READONLY  . . . .	Number	 00000001h   
+FILE_ATTRIBUTE_REPARSE_POINT . .	Number	 00000400h   
+FILE_ATTRIBUTE_SPARSE_FILE . . .	Number	 00000200h   
+FILE_ATTRIBUTE_SYSTEM  . . . . .	Number	 00000004h   
+FILE_ATTRIBUTE_TEMPORARY . . . .	Number	 00000100h   
+FILE_BEGIN . . . . . . . . . . .	Number	 00000000h   
+FILE_CURRENT . . . . . . . . . .	Number	 00000001h   
+FILE_DELETE_CHILD  . . . . . . .	Number	 00000040h   
+FILE_END . . . . . . . . . . . .	Number	 00000002h   
+FILE_READ_DATA . . . . . . . . .	Number	 00000001h   
+FILE_SHARE_DELETE  . . . . . . .	Number	 00000004h   
+FILE_SHARE_READ  . . . . . . . .	Number	 00000001h   
+FILE_SHARE_WRITE . . . . . . . .	Number	 00000002h   
+FILE_WRITE_DATA  . . . . . . . .	Number	 00000002h   
+FOCUS_EVENT  . . . . . . . . . .	Number	 00000010h   
+FORMAT_MESSAGE_ALLOCATE_BUFFER .	Number	 00000100h   
+FORMAT_MESSAGE_FROM_SYSTEM . . .	Number	 00001000h   
+FormatMessage  . . . . . . . . .	Text   	 FormatMessageA
+GENERIC_ALL  . . . . . . . . . .	Number	 10000000h   
+GENERIC_EXECUTE  . . . . . . . .	Number	 20000000h   
+GENERIC_READ . . . . . . . . . .	Number	 -80000000h   
+GENERIC_WRITE  . . . . . . . . .	Number	 40000000h   
+GetCommandLine . . . . . . . . .	Text   	 GetCommandLineA
+HANDLE . . . . . . . . . . . . .	Text   	 DWORD
+HEAP_GENERATE_EXCEPTIONS . . . .	Number	 00000004h   
+HEAP_GROWABLE  . . . . . . . . .	Number	 00000002h   
+HEAP_NO_SERIALIZE  . . . . . . .	Number	 00000001h   
+HEAP_REALLOC_IN_PLACE_ONLY . . .	Number	 00000010h   
+HEAP_ZERO_MEMORY . . . . . . . .	Number	 00000008h   
+IDABORT  . . . . . . . . . . . .	Number	 00000003h   
+IDCANCEL . . . . . . . . . . . .	Number	 00000002h   
+IDCLOSE  . . . . . . . . . . . .	Number	 00000008h   
+IDCONTINUE . . . . . . . . . . .	Number	 0000000Bh   
+IDHELP . . . . . . . . . . . . .	Number	 00000009h   
+IDIGNORE . . . . . . . . . . . .	Number	 00000005h   
+IDNO . . . . . . . . . . . . . .	Number	 00000007h   
+IDOK . . . . . . . . . . . . . .	Number	 00000001h   
+IDRETRY  . . . . . . . . . . . .	Number	 00000004h   
+IDTIMEOUT  . . . . . . . . . . .	Number	 00007D00h   
+IDTRYAGAIN . . . . . . . . . . .	Number	 0000000Ah   
+IDYES  . . . . . . . . . . . . .	Number	 00000006h   
+INT_MAX_BIT_LEN  . . . . . . . .	Number	 00000800h   
+INT_MAX_BYTE_LEN . . . . . . . .	Number	 00000100h   
+INT_MIN_BYTE_LEN . . . . . . . .	Number	 00000080h   
+INT_MIN_PADDED_BYTE_LEN  . . . .	Number	 00000084h   
+INT_PADDING_BYTE_LEN . . . . . .	Number	 00000004h   
+INVALID_HANDLE_VALUE . . . . . .	Number	 -00000001h   
+KBDOWN_FLAG  . . . . . . . . . .	Number	 00000001h   
+KEY_EVENT  . . . . . . . . . . .	Number	 00000001h   
+KEY_MASKS  . . . . . . . . . . .	Number	 0000001Fh   
+LEFT_ALT_PRESSED . . . . . . . .	Number	 00000002h   
+LEFT_CTRL_PRESSED  . . . . . . .	Number	 00000008h   
+MB_ABORTRETRYIGNORE  . . . . . .	Number	 00000002h   
+MB_APPLMODAL . . . . . . . . . .	Number	 00000000h   
+MB_CANCELTRYCONTINUE . . . . . .	Number	 00000006h   
+MB_DEFBUTTON1  . . . . . . . . .	Number	 00000000h   
+MB_DEFBUTTON2  . . . . . . . . .	Number	 00000100h   
+MB_DEFBUTTON3  . . . . . . . . .	Number	 00000200h   
+MB_DEFBUTTON4  . . . . . . . . .	Number	 00000300h   
+MB_HELP  . . . . . . . . . . . .	Number	 00004000h   
+MB_ICONASTERISK  . . . . . . . .	Number	 00000040h   
+MB_ICONERROR . . . . . . . . . .	Number	 00000010h   
+MB_ICONEXCLAMATION . . . . . . .	Number	 00000030h   
+MB_ICONHAND  . . . . . . . . . .	Number	 00000010h   
+MB_ICONINFORMATION . . . . . . .	Number	 00000040h   
+MB_ICONQUESTION  . . . . . . . .	Number	 00000020h   
+MB_ICONSTOP  . . . . . . . . . .	Number	 00000010h   
+MB_ICONWARNING . . . . . . . . .	Number	 00000030h   
+MB_OKCANCEL  . . . . . . . . . .	Number	 00000001h   
+MB_OK  . . . . . . . . . . . . .	Number	 00000000h   
+MB_RETRYCANCEL . . . . . . . . .	Number	 00000005h   
+MB_SYSTEMMODAL . . . . . . . . .	Number	 00001000h   
+MB_TASKMODAL . . . . . . . . . .	Number	 00002000h   
+MB_USERICON  . . . . . . . . . .	Number	 00000080h   
+MB_YESNOCANCEL . . . . . . . . .	Number	 00000003h   
+MB_YESNO . . . . . . . . . . . .	Number	 00000004h   
+MENU_EVENT . . . . . . . . . . .	Number	 00000008h   
+MOUSE_EVENT  . . . . . . . . . .	Number	 00000002h   
+MessageBox . . . . . . . . . . .	Text   	 MessageBoxA
+NULL . . . . . . . . . . . . . .	Number	 00000000h   
+NUMLOCK_ON . . . . . . . . . . .	Number	 00000020h   
+OPEN_ALWAYS  . . . . . . . . . .	Number	 00000004h   
+OPEN_EXISTING  . . . . . . . . .	Number	 00000003h   
+PeekConsoleInput . . . . . . . .	Text   	 PeekConsoleInputA
+RIGHT_ALT_PRESSED  . . . . . . .	Number	 00000001h   
+RIGHT_CTRL_PRESSED . . . . . . .	Number	 00000004h   
+ReadConsoleInput . . . . . . . .	Text   	 ReadConsoleInputA
+ReadConsole  . . . . . . . . . .	Text   	 ReadConsoleA
+SCROLLLOCK_ON  . . . . . . . . .	Number	 00000040h   
+SHIFT_MASK . . . . . . . . . . .	Number	 00000010h   
+SHIFT_PRESSED  . . . . . . . . .	Number	 00000010h   
+STD_ERROR_HANDLE . . . . . . . .	Number	 -0000000Ch   
+STD_INPUT_HANDLE . . . . . . . .	Number	 -0000000Ah   
+STD_OUTPUT_HANDLE  . . . . . . .	Number	 -0000000Bh   
+SetConsoleTitle  . . . . . . . .	Text   	 SetConsoleTitleA
+TAB  . . . . . . . . . . . . . .	Number	 00000009h   
+TRUE . . . . . . . . . . . . . .	Number	 00000001h   
+TRUNCATE_EXISTING  . . . . . . .	Number	 00000005h   
+VK_11  . . . . . . . . . . . . .	Number	 000000BDh   
+VK_12  . . . . . . . . . . . . .	Number	 000000BBh   
+VK_ADD . . . . . . . . . . . . .	Number	 0000006Bh   
+VK_BACK  . . . . . . . . . . . .	Number	 00000008h   
+VK_CANCEL  . . . . . . . . . . .	Number	 00000003h   
+VK_CAPITAL . . . . . . . . . . .	Number	 00000014h   
+VK_CLEAR . . . . . . . . . . . .	Number	 0000000Ch   
+VK_CONTROL . . . . . . . . . . .	Number	 00000011h   
+VK_DECIMAL . . . . . . . . . . .	Number	 0000006Eh   
+VK_DELETE  . . . . . . . . . . .	Number	 0000002Eh   
+VK_DIVIDE  . . . . . . . . . . .	Number	 0000006Fh   
+VK_DOWN  . . . . . . . . . . . .	Number	 00000028h   
+VK_END . . . . . . . . . . . . .	Number	 00000023h   
+VK_ESCAPE  . . . . . . . . . . .	Number	 0000001Bh   
+VK_EXECUTE . . . . . . . . . . .	Number	 0000002Bh   
+VK_F10 . . . . . . . . . . . . .	Number	 00000079h   
+VK_F11 . . . . . . . . . . . . .	Number	 0000007Ah   
+VK_F12 . . . . . . . . . . . . .	Number	 0000007Bh   
+VK_F13 . . . . . . . . . . . . .	Number	 0000007Ch   
+VK_F14 . . . . . . . . . . . . .	Number	 0000007Dh   
+VK_F15 . . . . . . . . . . . . .	Number	 0000007Eh   
+VK_F16 . . . . . . . . . . . . .	Number	 0000007Fh   
+VK_F17 . . . . . . . . . . . . .	Number	 00000080h   
+VK_F18 . . . . . . . . . . . . .	Number	 00000081h   
+VK_F19 . . . . . . . . . . . . .	Number	 00000082h   
+VK_F1  . . . . . . . . . . . . .	Number	 00000070h   
+VK_F20 . . . . . . . . . . . . .	Number	 00000083h   
+VK_F21 . . . . . . . . . . . . .	Number	 00000084h   
+VK_F22 . . . . . . . . . . . . .	Number	 00000085h   
+VK_F23 . . . . . . . . . . . . .	Number	 00000086h   
+VK_F24 . . . . . . . . . . . . .	Number	 00000087h   
+VK_F2  . . . . . . . . . . . . .	Number	 00000071h   
+VK_F3  . . . . . . . . . . . . .	Number	 00000072h   
+VK_F4  . . . . . . . . . . . . .	Number	 00000073h   
+VK_F5  . . . . . . . . . . . . .	Number	 00000074h   
+VK_F6  . . . . . . . . . . . . .	Number	 00000075h   
+VK_F7  . . . . . . . . . . . . .	Number	 00000076h   
+VK_F8  . . . . . . . . . . . . .	Number	 00000077h   
+VK_F9  . . . . . . . . . . . . .	Number	 00000078h   
+VK_HELP  . . . . . . . . . . . .	Number	 0000002Fh   
+VK_HOME  . . . . . . . . . . . .	Number	 00000024h   
+VK_INSERT  . . . . . . . . . . .	Number	 0000002Dh   
+VK_LBUTTON . . . . . . . . . . .	Number	 00000001h   
+VK_LCONTROL  . . . . . . . . . .	Number	 000000A2h   
+VK_LEFT  . . . . . . . . . . . .	Number	 00000025h   
+VK_LMENU . . . . . . . . . . . .	Number	 000000A4h   
+VK_LSHIFT  . . . . . . . . . . .	Number	 000000A0h   
+VK_MENU  . . . . . . . . . . . .	Number	 00000012h   
+VK_MULTIPLY  . . . . . . . . . .	Number	 0000006Ah   
+VK_NEXT  . . . . . . . . . . . .	Number	 00000022h   
+VK_NUMLOCK . . . . . . . . . . .	Number	 00000090h   
+VK_NUMPAD0 . . . . . . . . . . .	Number	 00000060h   
+VK_NUMPAD1 . . . . . . . . . . .	Number	 00000061h   
+VK_NUMPAD2 . . . . . . . . . . .	Number	 00000062h   
+VK_NUMPAD3 . . . . . . . . . . .	Number	 00000063h   
+VK_NUMPAD4 . . . . . . . . . . .	Number	 00000064h   
+VK_NUMPAD5 . . . . . . . . . . .	Number	 00000065h   
+VK_NUMPAD6 . . . . . . . . . . .	Number	 00000066h   
+VK_NUMPAD7 . . . . . . . . . . .	Number	 00000067h   
+VK_NUMPAD8 . . . . . . . . . . .	Number	 00000068h   
+VK_NUMPAD9 . . . . . . . . . . .	Number	 00000069h   
+VK_PAUSE . . . . . . . . . . . .	Number	 00000013h   
+VK_PRINT . . . . . . . . . . . .	Number	 0000002Ah   
+VK_PRIOR . . . . . . . . . . . .	Number	 00000021h   
+VK_RBUTTON . . . . . . . . . . .	Number	 00000002h   
+VK_RCONTROL  . . . . . . . . . .	Number	 000000A3h   
+VK_RETURN  . . . . . . . . . . .	Number	 0000000Dh   
+VK_RIGHT . . . . . . . . . . . .	Number	 00000027h   
+VK_RMENU . . . . . . . . . . . .	Number	 000000A5h   
+VK_RSHIFT  . . . . . . . . . . .	Number	 000000A1h   
+VK_SCROLL  . . . . . . . . . . .	Number	 00000091h   
+VK_SEPARATER . . . . . . . . . .	Number	 0000006Ch   
+VK_SHIFT . . . . . . . . . . . .	Number	 00000010h   
+VK_SNAPSHOT  . . . . . . . . . .	Number	 0000002Ch   
+VK_SPACE . . . . . . . . . . . .	Number	 00000020h   
+VK_SUBTRACT  . . . . . . . . . .	Number	 0000006Dh   
+VK_TAB . . . . . . . . . . . . .	Number	 00000009h   
+VK_UP  . . . . . . . . . . . . .	Number	 00000026h   
+WINDOW_BUFFER_SIZE_EVENT . . . .	Number	 00000004h   
+WriteConsoleOutputCharacter  . .	Text   	 WriteConsoleOutputCharacterA
+WriteConsole . . . . . . . . . .	Text   	 WriteConsoleA
+a_buf  . . . . . . . . . . . . .	Text   	 [ebp - a_space_exp]
+a_space_exp  . . . . . . . . . .	Number	 0000008Ch   
+a_sq_buf . . . . . . . . . . . .	Text   	 [ebp - a_sq_space_exp]
+a_sq_space_exp . . . . . . . . .	Number	 0000018Ch   
+black  . . . . . . . . . . . . .	Number	 00000000h   
+blue . . . . . . . . . . . . . .	Number	 00000001h   
+brown  . . . . . . . . . . . . .	Number	 00000006h   
+cyan . . . . . . . . . . . . . .	Number	 00000003h   
+d_var_space_ext_div  . . . . . .	Number	 0000019Ch   
+d_var  . . . . . . . . . . . . .	Text   	 [ebp - d_var_space_ext_div]
+dst_var  . . . . . . . . . . . .	Text   	 [ebp - total_space_ext_mul]
+exit . . . . . . . . . . . . . .	Text   	 INVOKE ExitProcess,0
+gen  . . . . . . . . . . . . . .	Byte	 0000018C _DATA	
+gray . . . . . . . . . . . . . .	Number	 00000008h   
+green  . . . . . . . . . . . . .	Number	 00000002h   
+input_string_hash  . . . . . . .	Text   	 [ebp - total_space_hash]
+input_string_main  . . . . . . .	Text   	 [ebp - input_string_space_main]
+input_string_space_main  . . . .	Number	 00000020h   
+lightBlue  . . . . . . . . . . .	Number	 00000009h   
+lightCyan  . . . . . . . . . . .	Number	 0000000Bh   
+lightGray  . . . . . . . . . . .	Number	 00000007h   
+lightGreen . . . . . . . . . . .	Number	 0000000Ah   
+lightMagenta . . . . . . . . . .	Number	 0000000Dh   
+lightRed . . . . . . . . . . . .	Number	 0000000Ch   
+magenta  . . . . . . . . . . . .	Number	 00000005h   
+n1_space_ext_mul . . . . . . . .	Number	 00000118h   
+n1_var . . . . . . . . . . . . .	Text   	 [ebp - n1_space_ext_mul]
+n2_space_ext_mul . . . . . . . .	Number	 00000218h   
+n2_var . . . . . . . . . . . . .	Text   	 [ebp - n2_space_ext_mul]
+n_var_space_ext_div  . . . . . .	Number	 00000118h   
+n_var  . . . . . . . . . . . . .	Text   	 [ebp - n_var_space_ext_div]
+other_var_space_exp  . . . . . .	Number	 0000000Ch   
+other_var_space_ext_mul  . . . .	Number	 00000018h   
+other_vars_space_ext_div . . . .	Number	 00000018h   
+output_hash  . . . . . . . . . .	Text   	 [ebp - total_space_main]
+prime  . . . . . . . . . . . . .	Byte	 0000020C _DATA	
+r_var  . . . . . . . . . . . . .	Text   	 [ebp - total_space_ext_div]
+red  . . . . . . . . . . . . . .	Number	 00000004h   
+total_space_exp  . . . . . . . .	Number	 0000020Ch   
+total_space_ext_div  . . . . . .	Number	 00000220h   
+total_space_ext_mul  . . . . . .	Number	 00000318h   
+total_space_hash . . . . . . . .	Number	 00000080h   
+total_space_main . . . . . . . .	Number	 000000A0h   
+white  . . . . . . . . . . . . .	Number	 0000000Fh   
+wsprintf . . . . . . . . . . . .	Text   	 wsprintfA
+xxxx . . . . . . . . . . . . . .	Byte	 00000000 _DATA	
+yellow . . . . . . . . . . . . .	Number	 0000000Eh   
+y  . . . . . . . . . . . . . . .	Text   	 [ebp - total_space_exp]
+
+	   0 Warnings
+	   0 Errors
